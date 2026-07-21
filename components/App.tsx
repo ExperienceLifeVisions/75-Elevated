@@ -29,13 +29,10 @@ interface AppProps { user: User }
 export default function App({ user }: AppProps) {
   const supabase = createClient()
 
-  // Profile & data state
   const [profile, setProfile] = useState<Profile>({ start_date: null, nutrition_approach: null, nutrition_declaration: null })
   const [completions, setCompletions] = useState<Record<string, Record<string, boolean>>>({})
   const [weeklyData, setWeeklyData] = useState<Record<number, Record<string, boolean>>>({})
   const [startDate, setStartDate] = useState<Date | null>(null)
-
-  // UI state
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [curDay, setCurDay] = useState(1)
   const [curWeek, setCurWeek] = useState(1)
@@ -47,15 +44,13 @@ export default function App({ user }: AppProps) {
   const [completedDay, setCompletedDay] = useState(1)
   const [loading, setLoading] = useState(true)
 
-  // Load all user data from Supabase
   const loadData = useCallback(async () => {
     const [profileRes, completionsRes, weeklyRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').eq('id', user.id).single(),
+      supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle(),
       supabase.from('daily_completions').select('*').eq('user_id', user.id),
       supabase.from('weekly_data').select('*').eq('user_id', user.id),
     ])
 
-    // Profile
     if (profileRes.data) {
       setProfile(profileRes.data)
       if (profileRes.data.start_date) {
@@ -66,15 +61,12 @@ export default function App({ user }: AppProps) {
         setCurDay(dn)
         setCurWeek(wn)
       } else {
-        // First time — show Standard screen
         setShowStandard(true)
       }
     } else {
-      // No profile yet — show Standard screen
       setShowStandard(true)
     }
 
-    // Daily completions — build map: dayKey -> { commitmentId: true }
     if (completionsRes.data) {
       const map: Record<string, Record<string, boolean>> = {}
       completionsRes.data.forEach(row => {
@@ -84,7 +76,6 @@ export default function App({ user }: AppProps) {
       setCompletions(map)
     }
 
-    // Weekly data
     if (weeklyRes.data) {
       const map: Record<number, Record<string, boolean>> = {}
       weeklyRes.data.forEach(row => {
@@ -102,7 +93,6 @@ export default function App({ user }: AppProps) {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Begin journey — save start date
   async function beginJourney() {
     const sd = today()
     const sdStr = localDateStr(sd)
@@ -119,16 +109,14 @@ export default function App({ user }: AppProps) {
     setShowStandard(false)
   }
 
-  // Toggle a daily commitment
   async function toggleCommitment(dayNum: number, commitmentId: string) {
     if (!startDate) return
     const todayNum = dayNumber(startDate)
-    if (dayNum > todayNum) return // future day — locked
+    if (dayNum > todayNum) return
 
     const currentlyDone = completions[dayNum]?.[commitmentId] ?? false
     const newValue = !currentlyDone
 
-    // Optimistic update
     setCompletions(prev => ({
       ...prev,
       [dayNum]: { ...prev[dayNum], [commitmentId]: newValue }
@@ -148,7 +136,6 @@ export default function App({ user }: AppProps) {
         .eq('commitment_id', commitmentId)
     }
 
-    // Check if all done
     const updatedDay = { ...completions[dayNum], [commitmentId]: newValue }
     const allDone = COMMITMENTS.every(c => updatedDay[c.id])
     if (allDone && newValue) {
@@ -159,7 +146,6 @@ export default function App({ user }: AppProps) {
     }
   }
 
-  // Toggle weekly commitment
   async function toggleWeekly(weekNum: number, commitmentId: string) {
     const currentlyDone = weeklyData[weekNum]?.[commitmentId] ?? false
     const newValue = !currentlyDone
@@ -179,7 +165,6 @@ export default function App({ user }: AppProps) {
     }, { onConflict: 'user_id,week_number' })
   }
 
-  // Save nutrition
   async function saveNutrition(approach: string, declaration: string) {
     await supabase.from('user_profiles').upsert({
       id: user.id,
@@ -190,14 +175,10 @@ export default function App({ user }: AppProps) {
     setProfile(p => ({ ...p, nutrition_approach: approach, nutrition_declaration: declaration }))
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--black)' }}>
-        <div style={{ width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--red)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0a' }}>
+        <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.08)', borderTopColor: '#c41e1e', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       </div>
     )
   }
@@ -206,7 +187,6 @@ export default function App({ user }: AppProps) {
 
   return (
     <div className="app">
-      {/* Standard Screen */}
       {showStandard && (
         <StandardScreen
           onBegin={beginJourney}
@@ -215,13 +195,8 @@ export default function App({ user }: AppProps) {
         />
       )}
 
-      {/* Header */}
       <div className="header" style={{ position: 'relative' }}>
-        <img
-          src="/logo.png"
-          alt="75 Elevated"
-          style={{ width: 160, height: 'auto', display: 'block', margin: '0 auto 2px' }}
-        />
+        <img src="/logo.png" alt="75 Elevated" style={{ width: 160, height: 'auto', display: 'block', margin: '0 auto 2px' }} />
         <p style={{ fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--gray)', textAlign: 'center', margin: 0 }}>
           A Walk With Jesus
         </p>
@@ -232,7 +207,6 @@ export default function App({ user }: AppProps) {
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="tabs">
         {(['today', 'weekly', 'journey', 'promise'] as Tab[]).map(tab => (
           <button key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
@@ -241,7 +215,6 @@ export default function App({ user }: AppProps) {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="tab-content">
         {activeTab === 'today' && startDate && (
           <TodayTab
@@ -282,7 +255,6 @@ export default function App({ user }: AppProps) {
         )}
       </div>
 
-      {/* Overlays */}
       {showShare && <ShareModal onClose={() => setShowShare(false)} />}
       {showInstall && <InstallScreen onClose={() => setShowInstall(false)} />}
       {showNourish && (
